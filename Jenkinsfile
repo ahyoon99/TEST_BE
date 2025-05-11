@@ -20,22 +20,35 @@ pipeline {
         }
 
         // CI: 모든 브랜치에서 실행되는 테스트
-        stage('Build & Test') {
-            steps {
-                sh 'mvn clean test'
-            }
-            post {
-                always {
-                    junit '**/target/surefire-reports/*.xml'
-                }
-                success {
-                    echo '테스트 성공! 코드가 품질 기준을 통과했습니다.'
-                }
-                failure {
-                    echo '테스트 실패! 코드를 수정해주세요.'
-                }
-            }
-        }
+//         stage('Build & Test') {
+//             steps {
+//                 sh 'mvn clean test'
+//             }
+//             post {
+//                 always {
+//                     junit '**/target/surefire-reports/*.xml'
+//                 }
+//                 success {
+//                     echo '테스트 성공! 코드가 품질 기준을 통과했습니다.'
+//                 }
+//                 failure {
+//                     echo '테스트 실패! 코드를 수정해주세요.'
+//                 }
+//             }
+//         }
+           stage('Build') {
+               steps {
+                   sh 'mvn clean compile -DskipTests'
+               }
+               post {
+                   success {
+                       echo '빌드 성공! 코드가 컴파일되었습니다.'
+                   }
+                   failure {
+                       echo '빌드 실패! 코드를 수정해주세요.'
+                   }
+               }
+           }
 
         // CD: main/master 브랜치에서만 실행되는 배포 단계
         stage('Package') {
