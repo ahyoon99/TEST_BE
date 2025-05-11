@@ -1,0 +1,75 @@
+pipeline {
+    agent any
+
+    tools {
+        maven 'maven' // 🔧 Jenkins에 등록된 Maven 이름
+    }
+
+    environment {
+        DEV_BACK_IP = '43.201.148.15' // 🔧 EC2 퍼블릭 IP
+        DOCKER_IMAGE = 'ahyoon99/questory-be' // 🔧 Docker Hub 저장소 : 'your-dockerhub-id/questory-be'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                echo '📥 Git Checkout'
+                git branch: 'dev', // 🔧 기능 브랜치
+                    credentialsId: 'jenkins-github-test', // 🔧 GitHub 인증 정보 : your-credential-id
+                    url: 'https://github.com/TEST/BE.git' // 🔧 GitHub URL
+            }
+        }
+
+        stage('Test') {
+            steps {
+                echo '🧪 Run Tests'
+                dir('questory/BE') {
+                    sh 'mvn clean test'
+                }
+            }
+        }
+
+        stage('Build Jar') {
+            steps {
+                echo '🏗️ Build Jar'
+                dir('questory/BE') {
+                    sh 'mvn package -DskipTests'
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                echo '🐳 Docker Image Build'
+                dir('questory/BE') {
+                    sh "docker build -t ${DOCKER_IMAGE}:latest ."
+                }
+            }
+        }
+
+        stage('Push to DockerHub') {
+            steps {
+                echo '📦 DockerHub Push'
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-cred', usernameVariable: 'DOCKERHUB_USER', passwordVariable: 'DOCKERHUB_PASS')]) {
+                    sh """
+                        echo "$DOCKERHUB_PASS" | docker login -u "$DOCKERHUB_USER" --password-stdin
+                        docker push ${DOCKER_IMAGE}:latest
+                    """
+                }
+            }
+        }
+
+        stage('Deploy on EC2') {
+            steps {
+                script {
+                    withCredentials([sshUserPrivateKey(credentialsId: 'pem-key', keyFileVariable: 'my_private_key_file')]) {
+                        echo '🚀 EC2 Deploy'
+                        sh """
+                            ssh -o StrictHostKeyChecking=no -i ${my_private_key_file} ubuntu@${DEV_BACK_IP} '
+                              docker pull ${DOCKER_IMAGE}:latest &&
+                              docker stop questory || true &&
+                              docker rm questory || true &&
+                              docker run -d --name questory -p 8080:8080 ${DOCKER_IMAGE}:latest
+                            '
+                        """
+                    }
